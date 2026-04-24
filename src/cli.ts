@@ -2,7 +2,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { Command } from 'commander';
-import { input, confirm, checkbox } from '@inquirer/prompts';
+import { input, confirm, checkbox, select } from '@inquirer/prompts';
 import { globalConfig, ConfigManager } from './config';
 import { SecretsManager } from './secrets';
 import { CacheManager } from './cache';
@@ -38,16 +38,22 @@ program
     });
 
     if (activeProviders.includes('bitbucket')) {
-      const wsInput = await input({ message: 'Bitbucket Workspace slug or URL:', default: globalConfig.providers.bitbucket?.workspace });
+      const wsInput = await input({ 
+        message: 'Bitbucket Workspace slug (found in your URL: bitbucket.org/WORKSPACE/):', 
+        default: globalConfig.providers.bitbucket?.workspace 
+      });
       let ws = wsInput.trim();
       const match = ws.match(/bitbucket\.org\/([^\/]+)/);
       if (match) ws = match[1];
       
-      globalConfig.providers.bitbucket = { workspace: ws, repos: globalConfig.providers.bitbucket?.repos };
-      const token = await input({ message: 'Bitbucket App Password (format: username:token) or Bearer Token:' });
+      globalConfig.providers.bitbucket = { 
+        workspace: ws, 
+        repos: globalConfig.providers.bitbucket?.repos 
+      };
+      const token = await input({ message: 'Bitbucket App Password (username:token) [leave blank to keep existing]:' });
       if (token) await SecretsManager.setToken('bitbucket', token);
 
-      const pickRepos = await confirm({ message: 'Do you want to select specific Bitbucket repositories to track?', default: true });
+      const pickRepos = await confirm({ message: 'Do you want to re-select Bitbucket repositories?', default: false });
       if (pickRepos) {
         const p = new BitbucketProvider(ws);
         const allRepos = await p.getRepositories();
@@ -59,24 +65,26 @@ program
             checked: globalConfig.providers.bitbucket?.repos?.includes(r) ?? true 
           }))
         });
-      } else {
-        delete globalConfig.providers.bitbucket.repos;
       }
-    } else {
-      delete globalConfig.providers.bitbucket;
     }
 
     if (activeProviders.includes('github')) {
-      const ownerInput = await input({ message: 'GitHub Organization/User or URL:', default: globalConfig.providers.github?.owner });
+      const ownerInput = await input({ 
+        message: 'GitHub Owner (username or organization name):', 
+        default: globalConfig.providers.github?.owner 
+      });
       let owner = ownerInput.trim();
       const match = owner.match(/github\.com\/([^\/]+)/);
       if (match) owner = match[1];
       
-      globalConfig.providers.github = { owner: owner, repos: globalConfig.providers.github?.repos };
-      const token = await input({ message: 'GitHub PAT (leave blank to keep existing):' });
+      globalConfig.providers.github = { 
+        owner: owner, 
+        repos: globalConfig.providers.github?.repos 
+      };
+      const token = await input({ message: 'GitHub PAT [leave blank to keep existing]:' });
       if (token) await SecretsManager.setToken('github', token);
 
-      const pickRepos = await confirm({ message: 'Do you want to select specific GitHub repositories to track?', default: true });
+      const pickRepos = await confirm({ message: 'Do you want to re-select GitHub repositories?', default: false });
       if (pickRepos) {
         const p = new GitHubProvider(owner);
         const allRepos = await p.getRepositories();
@@ -88,29 +96,54 @@ program
             checked: globalConfig.providers.github?.repos?.includes(r) ?? true 
           }))
         });
-      } else {
-        delete globalConfig.providers.github.repos;
       }
-    } else {
-      delete globalConfig.providers.github;
     }
 
     if (activeProviders.includes('gitlab')) {
-      const pidInput = await input({ message: 'GitLab Project/Group ID or URL:', default: globalConfig.providers.gitlab?.projectId });
+      const pidInput = await input({ 
+        message: 'GitLab Project ID or Path (e.g. 12345 or group/project):', 
+        default: globalConfig.providers.gitlab?.projectId 
+      });
       let pid = pidInput.trim();
       const match = pid.match(/gitlab\.com\/([^\/]+)/);
       if (match) pid = match[1];
       globalConfig.providers.gitlab = { projectId: pid };
-      const token = await input({ message: 'GitLab PAT (leave blank to keep existing):' });
+      const token = await input({ message: 'GitLab PAT [leave blank to keep existing]:' });
       if (token) await SecretsManager.setToken('gitlab', token);
-    } else {
-      delete globalConfig.providers.gitlab;
     }
 
     // Authors
-    const trackAnother = await confirm({ message: 'Do you want to configure author aliases?', default: globalConfig.authors.length === 0 });
-    if (trackAnother) {
-      globalConfig.authors = [];
+    if (globalConfig.authors.length > 0) {
+      console.log('\nCurrent Authors:');
+      globalConfig.authors.forEach((a, i) => console.log(`  ${i + 1}. ${a.name} <${a.email}>`));
+      
+      const authorAction = await select({
+        message: 'Manage Authors:',
+        choices: [
+          { name: 'Keep current authors', value: 'keep' },
+          { name: 'Add a new author', value: 'add' },
+          { name: 'Remove an author', value: 'remove' },
+          { name: 'Clear all and start over', value: 'clear' },
+        ]
+      });
+
+      if (authorAction === 'add') {
+        const name = await input({ message: 'Author Name to track:' });
+        const email = await input({ message: 'Author Email to track:' });
+        globalConfig.authors.push({ name, email });
+      } else if (authorAction === 'remove') {
+        const toRemove = await select({
+          message: 'Select author to remove:',
+          choices: globalConfig.authors.map((a, i) => ({ name: `${a.name} <${a.email}>`, value: i }))
+        });
+        globalConfig.authors.splice(toRemove, 1);
+      } else if (authorAction === 'clear') {
+        globalConfig.authors = [];
+      }
+    }
+
+    if (globalConfig.authors.length === 0) {
+      console.log('\nNo authors configured. Adding the first one:');
       let more = true;
       while (more) {
         const name = await input({ message: 'Author Name to track:' });
@@ -120,8 +153,15 @@ program
       }
     }
 
+    // Additional Info (PDF Header)
+    const info = await input({ 
+      message: 'Additional Info for PDF headers (e.g., "Your Name | Company Name"):',
+      default: globalConfig.additionalInfo 
+    });
+    globalConfig.additionalInfo = info.trim() || undefined;
+
     ConfigManager.save(globalConfig);
-    console.log('Setup complete! Configuration saved to ~/.ggts/config.json');
+    console.log(`Setup complete! Configuration saved to ${path.join(process.cwd(), '.ggts', 'config.json')}`);
   });
 
 program

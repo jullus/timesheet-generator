@@ -16,6 +16,57 @@ npm install
 npm run setup
 ```
 
+The `setup` command will launch an interactive wizard to configure your Git providers, author details, and optional header info (like your name/company) for the generated PDF reports.
+
+## Provider Configuration
+
+During setup, you will be asked for specific identifiers for your providers:
+
+- **Bitbucket Workspace**: This is the unique ID of your team or personal account. You can find it in the URL when browsing Bitbucket: `bitbucket.org/YOUR_WORKSPACE_ID/`.
+- **GitHub Owner**: This is your GitHub username or the name of the organization that owns the repositories you want to track.
+- **GitLab Project ID**: This can be the numeric ID found on the project's home page (usually under the project name) or the full project path (e.g., `namespace/project-name`).
+
+## Authentication & Tokens
+
+To fetch data from private repositories, you need to provide authentication tokens:
+
+### 1. GitHub (Personal Access Token)
+- Go to **Settings** > **Developer settings** > **Personal access tokens** > **Tokens (classic)**.
+- Click **Generate new token**.
+- Select the `repo` scope (to read private repository metadata).
+- Copy the token and paste it when prompted by `npm run setup`.
+
+### 2. Bitbucket (App Password)
+- Go to **Personal settings** (under your avatar) > **App passwords**.
+- Click **Create app password**.
+- Assign a label (e.g., "GGTS") and select **Repositories: Read**.
+- Use the generated password when prompted. Note: The format is usually `username:app_password`.
+
+### 3. GitLab (Access Token)
+- Go to **User Settings** > **Access Tokens**.
+- Create a new token with the `read_api` scope.
+- Copy and use it during setup.
+
+## Monthly Workflow (End of Month)
+
+Follow these steps at the end of each month before issuing your invoice:
+
+1. **Sync Latest Activity**: Fetch the latest commits for the current month.
+   ```bash
+   npm run fetch
+   ```
+2. **Update Workdays**: Open `workdays.txt` and add the total number of days you worked for the month.
+   ```text
+   2025-04 - 21
+   ```
+3. **Generate Timesheet**: Create the professional PDF report.
+   ```bash
+   npm run timesheet
+   ```
+4. **Review**: Find your generated report in the `timesheets/` directory (e.g., `timesheets/2025-04_timesheet.pdf`).
+
+---
+
 ## Usage
 
 All commands are run via `npm run`. When passing flags (like `--year`), you must use a double-dash `--` to separate NPM arguments from CLI arguments.
