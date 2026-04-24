@@ -1,2 +1,0 @@
-[console_scripts]
-ggts = ggts.cli:main

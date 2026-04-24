@@ -1,8 +1,0 @@
-Metadata-Version: 2.4
-Name: ggts
-Version: 0.1.0
-Requires-Dist: click
-Requires-Dist: jinja2
-Requires-Dist: xlsxwriter
-Requires-Dist: keyring
-Dynamic: requires-dist

@@ -1,0 +1,5 @@
+# Format: YYYY-MM - DaysWorked
+# Example:
+2022-01 - 21
+2022-02 - 20
+2022-03 - 22

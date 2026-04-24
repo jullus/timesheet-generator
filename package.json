@@ -1,0 +1,47 @@
+{
+  "name": "timesheet-generator",
+  "version": "1.0.0",
+  "description": "A multi-vendor, local-first Git activity aggregation and timesheet generation CLI.",
+  "main": "dist/cli.js",
+  "bin": {
+    "ggts": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "ts-node src/cli.ts",
+    "setup": "ts-node src/cli.ts setup",
+    "fetch": "ts-node src/cli.ts fetch",
+    "timesheet": "ts-node src/cli.ts timesheet",
+    "report": "ts-node src/cli.ts report",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jullus/timesheet-generator.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/jullus/timesheet-generator/issues"
+  },
+  "homepage": "https://github.com/jullus/timesheet-generator#readme",
+  "devDependencies": {
+    "@types/ini": "^4.1.1",
+    "@types/node": "^25.6.0",
+    "@types/pdfmake": "^0.3.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^6.0.3"
+  },
+  "dependencies": {
+    "@inquirer/prompts": "^8.4.2",
+    "@types/pdfkit": "^0.17.6",
+    "axios": "^1.15.2",
+    "commander": "^14.0.3",
+    "exceljs": "^4.4.0",
+    "ini": "^6.0.0",
+    "keytar": "^7.9.0",
+    "pdfkit": "^0.18.0"
+  }
+}
