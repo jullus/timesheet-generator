@@ -195,6 +195,11 @@ program
       displayTitle = `Year ${year}`;
     }
 
+    const now = new Date();
+    if (until > now) {
+      until = now;
+    }
+
     const globalConfig = ConfigManager.load();
     const existingCommits = CacheManager.loadCommits();
 

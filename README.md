@@ -4,6 +4,12 @@ A multi-vendor, local-first Git activity aggregation and high-fidelity timesheet
 
 The tool operates on a strict metadata-only principle—it analyzes timestamps, commit hashes, authors, and commit messages without ever reading your local file diffs or proprietary source code.
 
+## Samples
+
+| PDF Report | Excel Spreadsheet |
+|:---:|:---:|
+| ![PDF Sample](docs/images/pdf_sample.png) | ![XLSX Sample](docs/images/xlsx_sample.png) |
+
 ## Installation & Setup
 
 This tool is designed to run locally within your project directory.
