@@ -60,7 +60,7 @@ export class BitbucketProvider extends BaseProvider {
       }
     }
     process.stdout.write(`\n`);
-    return reposToFetch;
+    return reposToFetch.sort((a, b) => a.localeCompare(b));
   }
 
   async fetchCommits(since?: Date, until?: Date, authorPatterns?: string[]): Promise<CommitActivity[]> {
@@ -83,23 +83,7 @@ export class BitbucketProvider extends BaseProvider {
     if (this.repoSlug) {
       reposToFetch.push(this.repoSlug);
     } else {
-      // Fetch all repos in workspace
-      let reposUrl = `https://api.bitbucket.org/2.0/repositories/${this.workspace}?pagelen=100`;
-      process.stdout.write(`  Discovering repositories... `);
-      while (reposUrl) {
-        try {
-          const res = await this.getWithRetry(reposUrl, headers);
-          for (const r of res.data.values) {
-            reposToFetch.push(r.slug);
-          }
-          reposUrl = res.data.next || '';
-          process.stdout.write(`[Found ${reposToFetch.length}] `);
-        } catch (e) {
-          console.error(`\nError fetching Bitbucket repos:`, e);
-          break;
-        }
-      }
-      process.stdout.write(`\n`);
+      reposToFetch = await this.getRepositories();
     }
 
     let repoCount = 0;

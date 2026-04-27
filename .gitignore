@@ -6,4 +6,5 @@ workdays.txt
 report.pdf
 report.xlsx
 timesheets
+timesheets_backup
 *.log

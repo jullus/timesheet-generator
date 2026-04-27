@@ -206,7 +206,7 @@ export class ReportGenerator {
             groups[key].minutes += c.durationMinutes;
           }
           const factor = 480 / Object.values(groups).reduce((s, g) => s + g.minutes, 0);
-          const keys = Object.keys(groups);
+          const keys = Object.keys(groups).sort((a, b) => a.localeCompare(b));
           let alloc = 0;
           display = keys.map((k, i) => {
             const h = i === keys.length - 1 ? 8.0 - alloc : Math.round(((groups[k].minutes * factor) / 60) * 2) / 2;
@@ -232,7 +232,8 @@ export class ReportGenerator {
       doc.fontSize(9).font('Helvetica-Bold').fillColor('#000000').text(`Summary: ${activeCount} Days Worked | ${activeCount * 8} Total Hours`, gridLeft, footerY);
       let lx = gridLeft, ly = doc.page.height - 60;
       doc.fontSize(8).font('Helvetica-Bold').text('Project Legend: ', lx, ly); lx += 80;
-      for (const p of monthProjects) {
+      const sortedMonthProjects = Array.from(monthProjects).sort((a, b) => a.localeCompare(b));
+      for (const p of sortedMonthProjects) {
         const c = this.getProjectColor(p), w = doc.widthOfString(p) + 20;
         if (lx + w > doc.page.width - 30) { lx = gridLeft + 80; ly += 12; }
         doc.fillColor(c).font('Helvetica').text(p, lx, ly, { lineBreak: false }); lx += w;
@@ -261,12 +262,13 @@ export class ReportGenerator {
           groups[key].minutes += c.durationMinutes;
         }
         const factor = 480 / Object.values(groups).reduce((s, g) => s + g.minutes, 0);
-        const keys = Object.keys(groups);
+        const keys = Object.keys(groups).sort((a, b) => a.localeCompare(b));
         let alloc = 0;
         keys.forEach((k, i) => {
           const h = i === keys.length - 1 ? 8.0 - alloc : Math.round(((groups[k].minutes * factor) / 60) * 2) / 2;
           alloc += h;
-          worksheet.addRow({ day: d.date.toISOString().split('T')[0], project: groups[k].project, task: k.split('|')[1], hours: h });
+          const dayStr = `${d.date.getFullYear()}-${String(d.date.getMonth() + 1).padStart(2, '0')}-${String(d.date.getDate()).padStart(2, '0')}`;
+          worksheet.addRow({ day: dayStr, project: groups[k].project, task: k.split('|')[1], hours: h });
         });
       }
     }

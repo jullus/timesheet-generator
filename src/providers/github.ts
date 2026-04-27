@@ -39,7 +39,7 @@ export class GitHubProvider extends BaseProvider {
       }
     }
     process.stdout.write(`\n`);
-    return reposToFetch;
+    return reposToFetch.sort((a, b) => a.localeCompare(b));
   }
 
   async fetchCommits(since?: Date, until?: Date, authorPatterns?: string[]): Promise<CommitActivity[]> {
@@ -56,23 +56,7 @@ export class GitHubProvider extends BaseProvider {
     if (this.repoName) {
       reposToFetch.push(this.repoName);
     } else {
-      let page = 1;
-      process.stdout.write(`  Discovering repositories... `);
-      while (true) {
-        try {
-          const res = await axios.get(`https://api.github.com/users/${this.owner}/repos?per_page=100&page=${page}`, { headers });
-          if (res.data.length === 0) break;
-          for (const r of res.data) {
-            reposToFetch.push(r.name);
-          }
-          process.stdout.write(`[Found ${reposToFetch.length}] `);
-          page++;
-        } catch (e) {
-          console.error(`\nError fetching GitHub repos:`, e);
-          break;
-        }
-      }
-      process.stdout.write(`\n`);
+      reposToFetch = await this.getRepositories();
     }
 
     let repoCount = 0;

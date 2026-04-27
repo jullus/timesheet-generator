@@ -38,6 +38,11 @@ export class ConfigManager {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
+    
+    // Sort repos for consistency
+    if (config.providers.bitbucket?.repos) config.providers.bitbucket.repos.sort((a, b) => a.localeCompare(b));
+    if (config.providers.github?.repos) config.providers.github.repos.sort((a, b) => a.localeCompare(b));
+
     fs.writeFileSync(this.CONFIG_FILE, JSON.stringify(config, null, 2), 'utf-8');
   }
 }

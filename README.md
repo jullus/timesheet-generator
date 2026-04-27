@@ -112,6 +112,9 @@ By default, this command only runs for the **current month**.
 # Generate PDF for the current month
 npm run timesheet
 
+# Generate PDF for a specific month
+npm run timesheet -- --month 2026-04
+
 # Generate PDF for the past 3 years (split into monthly files)
 npm run timesheet -- --years 3
 

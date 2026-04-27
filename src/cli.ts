@@ -348,7 +348,9 @@ program
       let finalPath = out;
       try {
         if (fs.existsSync(out) && fs.lstatSync(out).isDirectory()) {
-          const filename = `timesheet_${new Date().toISOString().split('T')[0]}.${format === 'xlsx' ? 'xlsx' : format === 'pdf' ? 'pdf' : 'csv'}`;
+          const now = new Date();
+          const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+          const filename = `timesheet_${dateStr}.${format === 'xlsx' ? 'xlsx' : format === 'pdf' ? 'pdf' : 'csv'}`;
           finalPath = path.join(out, filename);
         } else {
           const dir = path.dirname(out);
@@ -399,6 +401,7 @@ program
   .option('--years <count>', 'Generate reports for the past X years')
   .option('--since <date>', 'Start date (YYYY-MM-DD)')
   .option('--until <date>', 'End date (YYYY-MM-DD)')
+  .option('--month <month>', 'Specific month to generate (YYYY-MM)')
   .option('--format <format>', 'Output format (xlsx|pdf)', 'pdf')
   .action(async (options) => {
     let allCommits = CacheManager.loadCommits();
@@ -417,6 +420,11 @@ program
     } else if (options.since || options.until) {
       since = options.since ? new Date(options.since) : new Date(0);
       until = options.until ? new Date(options.until) : new Date();
+    } else if (options.month) {
+      const parts = options.month.split('-');
+      if (parts.length !== 2) throw new Error('Month must be in YYYY-MM format');
+      since = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, 1);
+      until = new Date(parseInt(parts[0]), parseInt(parts[1]), 0, 23, 59, 59);
     } else {
       // Default: Current month
       since = new Date(until.getFullYear(), until.getMonth(), 1);
@@ -437,7 +445,8 @@ program
     const monthsToVerify: string[] = [];
     let iter = new Date(first.getFullYear(), first.getMonth(), 1);
     while (iter <= last) {
-      monthsToVerify.push(iter.toISOString().split('T')[0].substring(0, 7)); // YYYY-MM
+      const mStr = `${iter.getFullYear()}-${String(iter.getMonth() + 1).padStart(2, '0')}`;
+      monthsToVerify.push(mStr); // YYYY-MM
       iter.setMonth(iter.getMonth() + 1);
     }
 
@@ -459,13 +468,22 @@ program
     });
 
     // Validate all months in range are present
-    for (const m of monthsToVerify) {
+    const existingMonths = monthsToVerify.filter(m => {
       if (!targetWorkdays[m]) {
-        console.error(`\n❌ Error: Month '${m}' is missing from 'workdays.txt'.`);
-        console.log(`Please add an entry like: ${m} - 21`);
-        process.exit(1);
+        console.warn(`\n⚠️  Warning: Month '${m}' is missing from 'workdays.txt'. Skipping...`);
+        return false;
       }
+      return true;
+    });
+
+    if (existingMonths.length === 0 && monthsToVerify.length > 0) {
+      console.log('No months from the selected range are present in workdays.txt. Nothing to generate.');
+      return;
     }
+
+    // Update monthsToVerify with only existing ones
+    monthsToVerify.splice(0, monthsToVerify.length, ...existingMonths);
+
 
     const timesheetDir = path.join(process.cwd(), 'timesheets');
     if (!fs.existsSync(timesheetDir)) fs.mkdirSync(timesheetDir, { recursive: true });
