@@ -12,7 +12,6 @@
     "setup": "ts-node src/cli.ts setup",
     "fetch": "ts-node src/cli.ts fetch",
     "timesheet": "ts-node src/cli.ts timesheet",
-    "report": "ts-node src/cli.ts report",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {

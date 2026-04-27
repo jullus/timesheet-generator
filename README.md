@@ -12,46 +12,34 @@ The tool operates on a strict metadata-only principle—it analyzes timestamps, 
 
 ## Installation & Setup
 
-This tool is designed to run locally within your project directory.
+1. **Prerequisites**: Have your Git provider tokens ready (see [Authentication](#authentication) below).
+2. **Install**:
+   ```bash
+   npm install
+   ```
+3. **Configure**:
+   ```bash
+   npm run setup
+   ```
 
-```bash
-# Install dependencies
-npm install
+The `setup` command is an interactive wizard that configures providers, authors, and PDF header info.
 
-# Run the setup wizard to configure providers and authors
-npm run setup
-```
+## Authentication
 
-The `setup` command will launch an interactive wizard to configure your Git providers, author details, and optional header info (like your name/company) for the generated PDF reports.
+Devs: You'll need these tokens during `setup`. They are stored locally in `.ggts/secrets.json`.
+
+| Provider | Token Location | Scopes Needed | Note |
+| :--- | :--- | :--- | :--- |
+| **GitHub** | Settings → Developer settings → PATs (Classic) | `repo` | |
+| **GitLab** | User Settings → Access Tokens | `read_api` | |
+| **Bitbucket** | Personal settings → App passwords | `Repositories: Read` | |
 
 ## Provider Configuration
 
-During setup, you will be asked for specific identifiers for your providers:
-
-- **Bitbucket Workspace**: This is the unique ID of your team or personal account. You can find it in the URL when browsing Bitbucket: `bitbucket.org/YOUR_WORKSPACE_ID/`.
-- **GitHub Owner**: This is your GitHub username or the name of the organization that owns the repositories you want to track.
-- **GitLab Project ID**: This can be the numeric ID found on the project's home page (usually under the project name) or the full project path (e.g., `namespace/project-name`).
-
-## Authentication & Tokens
-
-To fetch data from private repositories, you need to provide authentication tokens:
-
-### 1. GitHub (Personal Access Token)
-- Go to **Settings** > **Developer settings** > **Personal access tokens** > **Tokens (classic)**.
-- Click **Generate new token**.
-- Select the `repo` scope (to read private repository metadata).
-- Copy the token and paste it when prompted by `npm run setup`.
-
-### 2. Bitbucket (App Password)
-- Go to **Personal settings** (under your avatar) > **App passwords**.
-- Click **Create app password**.
-- Assign a label (e.g., "GGTS") and select **Repositories: Read**.
-- Use the generated password when prompted. Note: The format is usually `username:app_password`.
-
-### 3. GitLab (Access Token)
-- Go to **User Settings** > **Access Tokens**.
-- Create a new token with the `read_api` scope.
-- Copy and use it during setup.
+During setup, you will need:
+- **Bitbucket Workspace**: Unique ID from your URL: `bitbucket.org/WORKSPACE/`.
+- **GitHub Owner**: Username or Organization name.
+- **GitLab Project ID**: Numeric ID or full path (`namespace/project`).
 
 ## Monthly Workflow (End of Month)
 
@@ -128,14 +116,6 @@ npm run timesheet -- --years 3
 npm run timesheet -- --year 2025 --format xlsx
 ```
 
-### 4. Legacy Reports
-Generate raw data exports.
-```bash
-# Generate a simple terminal summary
-npm run report -- --format terminal
-
-# Generate a CSV export
-npm run report -- --format csv --output export.csv
 ```
 
 ## Data Storage

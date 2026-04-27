@@ -274,8 +274,4 @@ export class ReportGenerator {
     }
     await workbook.xlsx.writeFile(filename);
   }
-
-  generateTerminal() { console.log('Deprecated'); }
-  generateMarkdown() { return '# Deprecated'; }
-  generateCsv() {}
 }

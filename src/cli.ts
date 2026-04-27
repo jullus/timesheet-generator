@@ -25,6 +25,7 @@ program
   .description('Interactive wizard to set up providers and configuration')
   .action(async () => {
     console.log('--- GGTS Setup ---');
+    console.log('Tip: Have your API tokens ready (see README.md for details)\n');
     
     // Providers
     const activeProviders = await checkbox({
@@ -50,8 +51,22 @@ program
         workspace: ws, 
         repos: globalConfig.providers.bitbucket?.repos 
       };
-      const token = await input({ message: 'Bitbucket App Password (username:token) [leave blank to keep existing]:' });
-      if (token) await SecretsManager.setToken('bitbucket', token);
+      
+      const bbUser = await input({ 
+        message: 'Bitbucket Username (or email used for login):',
+        transformer: (val) => val.trim()
+      });
+      const bbPass = await input({ 
+        message: 'Bitbucket App Password [Needs "Repositories: Read" scope]:',
+        transformer: (val) => val.trim()
+      });
+
+      if (bbUser && bbPass) {
+        await SecretsManager.setToken('bitbucket', `${bbUser}:${bbPass}`);
+      } else if (bbPass) {
+        // Fallback for just token/pass if user doesn't provide username (though prompt asks for it)
+        await SecretsManager.setToken('bitbucket', bbPass);
+      }
 
       const pickRepos = await confirm({ message: 'Do you want to re-select Bitbucket repositories?', default: false });
       if (pickRepos) {
@@ -81,7 +96,10 @@ program
         owner: owner, 
         repos: globalConfig.providers.github?.repos 
       };
-      const token = await input({ message: 'GitHub PAT [leave blank to keep existing]:' });
+      const token = await input({ 
+        message: 'GitHub Personal Access Token (classic) [Needs "repo" scope]:',
+        transformer: (val) => val.trim()
+      });
       if (token) await SecretsManager.setToken('github', token);
 
       const pickRepos = await confirm({ message: 'Do you want to re-select GitHub repositories?', default: false });
@@ -108,7 +126,10 @@ program
       const match = pid.match(/gitlab\.com\/([^\/]+)/);
       if (match) pid = match[1];
       globalConfig.providers.gitlab = { projectId: pid };
-      const token = await input({ message: 'GitLab PAT [leave blank to keep existing]:' });
+      const token = await input({ 
+        message: 'GitLab Personal Access Token [Needs "read_api" scope]:',
+        transformer: (val) => val.trim()
+      });
       if (token) await SecretsManager.setToken('gitlab', token);
     }
 
@@ -325,78 +346,6 @@ program
     console.log(`✅ Fetch complete.`);
   });
 
-program
-  .command('report')
-  .description('Generate a timesheet report from locally cached commits')
-  .option('--since <date>', 'Start date (ISO format YYYY-MM-DD)')
-  .option('--until <date>', 'End date (ISO format YYYY-MM-DD)')
-  .option('--format <format>', 'Output format (terminal|markdown|csv|xlsx|pdf)', 'terminal')
-  .option('--output <file>', 'Output file name (required for csv, xlsx, and pdf)')
-  .action(async (options) => {
-    let commits = CacheManager.loadCommits();
-    
-    if (options.since) {
-      const sinceDt = new Date(options.since);
-      commits = commits.filter(c => c.timestamp >= sinceDt);
-    }
-    if (options.until) {
-      const untilDt = new Date(options.until);
-      commits = commits.filter(c => c.timestamp <= untilDt);
-    }
-
-    if (commits.length === 0) {
-      console.log('No commits found in the local cache matching the criteria. Try running `ggts fetch` first.');
-      return;
-    }
-
-    const resolveOutputPath = (out: string, format: string) => {
-      let finalPath = out;
-      try {
-        if (fs.existsSync(out) && fs.lstatSync(out).isDirectory()) {
-          const now = new Date();
-          const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-          const filename = `timesheet_${dateStr}.${format === 'xlsx' ? 'xlsx' : format === 'pdf' ? 'pdf' : 'csv'}`;
-          finalPath = path.join(out, filename);
-        } else {
-          const dir = path.dirname(out);
-          if (!fs.existsSync(dir)) {
-            fs.mkdirSync(dir, { recursive: true });
-          }
-        }
-      } catch (e) {
-        // Fallback if path doesn't exist yet or other error
-      }
-      return finalPath;
-    };
-
-    const generator = new ReportGenerator(commits);
-
-    const firstCommitDate = commits[0].timestamp;
-    const placeholderDate = options.since ? new Date(options.since) : new Date(firstCommitDate.getFullYear(), firstCommitDate.getMonth(), 1);
-
-    if (options.format === 'terminal') {
-      generator.generateTerminal();
-    } else if (options.format === 'markdown') {
-      console.log(generator.generateMarkdown());
-    } else if (options.format === 'csv') {
-      if (!options.output) throw new Error('--output is required for CSV');
-      const outPath = resolveOutputPath(options.output, 'csv');
-      generator.generateCsv();
-      console.log(`CSV report saved to ${outPath}`);
-    } else if (options.format === 'xlsx') {
-      if (!options.output) throw new Error('--output is required for XLSX');
-      const outPath = resolveOutputPath(options.output, 'xlsx');
-      await generator.generateTimesheetXlsx(outPath, placeholderDate);
-      console.log(`Excel report saved to ${outPath}`);
-    } else if (options.format === 'pdf') {
-      if (!options.output) throw new Error('--output is required for PDF');
-      const outPath = resolveOutputPath(options.output, 'pdf');
-      await generator.generateTimesheetPdf(outPath, placeholderDate);
-      console.log(`PDF report saved to ${outPath}`);
-    } else {
-      console.error(`Unsupported format: ${options.format}`);
-      process.exit(1);
-    }
   });
 
 program
