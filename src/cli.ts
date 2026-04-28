@@ -346,8 +346,6 @@ program
     console.log(`✅ Fetch complete.`);
   });
 
-  });
-
 program
   .command('timesheet')
   .description('Generate filled 8h/day monthly reports in timesheets/ folder')

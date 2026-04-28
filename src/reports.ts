@@ -168,7 +168,7 @@ export class ReportGenerator {
 
       const sortedAllCommits = [...this.commits].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
       const { days, activeCount } = this.calculateMonthEntries(monthDate);
-      const monthProjects = new Set<string>();
+      const projectHours: Record<string, number> = {};
 
       doc.fontSize(18).font('Helvetica-Bold').fillColor('#000000').text(monthDate.toLocaleString('default', { month: 'long', year: 'numeric' }), { align: 'center' });
       if (this.config.additionalInfo) {
@@ -194,7 +194,7 @@ export class ReportGenerator {
         if (isActive) {
           const groups: Record<string, { minutes: number, project: string }> = {};
           for (const c of info.commits) {
-            monthProjects.add(c.projectName);
+            const projectName = c.projectName;
             let tickets = TicketParser.extractTickets(c.message);
             if (tickets.length === 0) {
               const next = sortedAllCommits.find(nc => nc.timestamp > c.timestamp && nc.projectName === c.projectName && TicketParser.extractTickets(nc.message).length > 0);
@@ -209,9 +209,11 @@ export class ReportGenerator {
           const keys = Object.keys(groups).sort((a, b) => a.localeCompare(b));
           let alloc = 0;
           display = keys.map((k, i) => {
-            const h = i === keys.length - 1 ? 8.0 - alloc : Math.round(((groups[k].minutes * factor) / 60) * 2) / 2;
+            const h = i === keys.length - 1 ? 8.0 - alloc : (groups[k].minutes * factor) / 60;
             alloc += h;
-            return { text: `${k.split('|')[1]}: ${h.toFixed(1)}h`, color: this.getProjectColor(groups[k].project) };
+            const projectName = groups[k].project;
+            projectHours[projectName] = (projectHours[projectName] || 0) + h;
+            return { text: `${k.split('|')[1]}: ${h.toFixed(1)}h`, color: this.getProjectColor(projectName) };
           });
         } else {
           display = [{ text: info.type === 'holiday' ? 'HOLIDAY' : (info.type === 'weekend' ? 'WEEKEND' : ''), color: '#999999' }];
@@ -232,11 +234,38 @@ export class ReportGenerator {
       doc.fontSize(9).font('Helvetica-Bold').fillColor('#000000').text(`Summary: ${activeCount} Days Worked | ${activeCount * 8} Total Hours`, gridLeft, footerY);
       let lx = gridLeft, ly = doc.page.height - 60;
       doc.fontSize(8).font('Helvetica-Bold').text('Project Legend: ', lx, ly); lx += 80;
-      const sortedMonthProjects = Array.from(monthProjects).sort((a, b) => a.localeCompare(b));
-      for (const p of sortedMonthProjects) {
-        const c = this.getProjectColor(p), w = doc.widthOfString(p) + 20;
+      const sortedMonthProjects = Object.keys(projectHours).sort((a, b) => a.localeCompare(b));
+      const projectData = sortedMonthProjects.map(p => ({
+        name: p,
+        exactDays: projectHours[p] / 8,
+        roundedDays: Math.floor((projectHours[p] / 8) * 2) / 2
+      }));
+
+      let totalRounded = projectData.reduce((sum, p) => sum + p.roundedDays, 0);
+      let remaining = activeCount - totalRounded;
+
+      while (remaining > 0) {
+        let bestProject = projectData[0];
+        let maxDiff = -Infinity;
+        for (const p of projectData) {
+          const diff = p.exactDays - p.roundedDays;
+          if (diff > maxDiff) {
+            maxDiff = diff;
+            bestProject = p;
+          }
+        }
+        bestProject.roundedDays += 0.5;
+        remaining -= 0.5;
+      }
+
+      for (const p of projectData) {
+        const d = p.roundedDays;
+        const h = p.exactDays * 8;
+        const isRounded = Math.abs(d - p.exactDays) > 0.001;
+        const label = `${p.name} (${isRounded ? '~' : ''}${d}d / ${h.toFixed(2)}h)`;
+        const c = this.getProjectColor(p.name), w = doc.widthOfString(label) + 20;
         if (lx + w > doc.page.width - 30) { lx = gridLeft + 80; ly += 12; }
-        doc.fillColor(c).font('Helvetica').text(p, lx, ly, { lineBreak: false }); lx += w;
+        doc.fillColor(c).font('Helvetica').text(label, lx, ly, { lineBreak: false }); lx += w;
       }
       doc.end();
       stream.on('finish', () => resolve());
@@ -265,7 +294,7 @@ export class ReportGenerator {
         const keys = Object.keys(groups).sort((a, b) => a.localeCompare(b));
         let alloc = 0;
         keys.forEach((k, i) => {
-          const h = i === keys.length - 1 ? 8.0 - alloc : Math.round(((groups[k].minutes * factor) / 60) * 2) / 2;
+          const h = i === keys.length - 1 ? 8.0 - alloc : (groups[k].minutes * factor) / 60;
           alloc += h;
           const dayStr = `${d.date.getFullYear()}-${String(d.date.getMonth() + 1).padStart(2, '0')}-${String(d.date.getDate()).padStart(2, '0')}`;
           worksheet.addRow({ day: dayStr, project: groups[k].project, task: k.split('|')[1], hours: h });
