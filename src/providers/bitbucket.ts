@@ -63,7 +63,7 @@ export class BitbucketProvider extends BaseProvider {
     return reposToFetch.sort((a, b) => a.localeCompare(b));
   }
 
-  async fetchCommits(since?: Date, until?: Date, authorPatterns?: string[]): Promise<CommitActivity[]> {
+  async fetchCommits(since?: Date, until?: Date, authorPatterns?: string[], branchStrategy: 'develop' | 'all-except-main' = 'develop'): Promise<CommitActivity[]> {
     const commits: CommitActivity[] = [];
     const token = await SecretsManager.getToken('bitbucket');
 
@@ -89,67 +89,98 @@ export class BitbucketProvider extends BaseProvider {
     let repoCount = 0;
     for (const repo of reposToFetch) {
       repoCount++;
-      // process.stdout.write(`  (${repoCount}/${reposToFetch.length}) Fetching commits for: ${repo}... `);
-      let url = `https://api.bitbucket.org/2.0/repositories/${this.workspace}/${repo}/commits?pagelen=100`;
-
-      // Add a small delay between repos to be polite
-      await this.sleep(100);
-
-      while (url) {
-        try {
-          const response = await this.getWithRetry(url, headers);
-          const data = response.data;
-
-          for (const item of (data.values || [])) {
-            const authorName = item.author.user ? item.author.user.display_name : item.author.raw;
-            const authorEmail = '';
-
-            const dt = new Date(item.date);
-
-            if (until && dt > until) continue;
-            if (since && dt < since) {
-              url = ''; // Assuming descending order, we can break
-              break;
-            }
-
-            if (authorPatterns && authorPatterns.length > 0) {
-              let match = false;
-              for (const pat of authorPatterns) {
-                const pLower = pat.toLowerCase();
-                if (authorName.toLowerCase().includes(pLower) || authorEmail.toLowerCase().includes(pLower)) {
-                  match = true;
-                  break;
-                }
+      
+      let branchesToFetch: string[] = [];
+      if (branchStrategy === 'all-except-main') {
+        let branchUrl = `https://api.bitbucket.org/2.0/repositories/${this.workspace}/${repo}/refs/branches?pagelen=100`;
+        while (branchUrl) {
+          try {
+            const bRes = await this.getWithRetry(branchUrl, headers);
+            for (const b of (bRes.data.values || [])) {
+              if (b.name !== 'master' && b.name !== 'main') {
+                branchesToFetch.push(b.name);
               }
-              if (!match) continue;
+            }
+            branchUrl = bRes.data.next || '';
+          } catch (e) {
+            console.error(`\nError fetching Bitbucket branches for ${repo}:`, e);
+            break;
+          }
+        }
+      } else {
+        branchesToFetch = ['develop'];
+      }
+
+      if (branchesToFetch.length === 0) continue;
+
+      for (const branch of branchesToFetch) {
+        let url = `https://api.bitbucket.org/2.0/repositories/${this.workspace}/${repo}/commits/${encodeURIComponent(branch)}?pagelen=100`;
+        let branchFallbackDone = false;
+
+        // Add a small delay to be polite
+        await this.sleep(100);
+
+        while (url) {
+          try {
+            const response = await this.getWithRetry(url, headers);
+            const data = response.data;
+
+            for (const item of (data.values || [])) {
+              const authorName = item.author.user ? item.author.user.display_name : item.author.raw;
+              const authorEmail = '';
+
+              const dt = new Date(item.date);
+
+              if (until && dt > until) continue;
+              if (since && dt < since) {
+                url = ''; // Assuming descending order, we can break
+                break;
+              }
+
+              if (authorPatterns && authorPatterns.length > 0) {
+                let match = false;
+                for (const pat of authorPatterns) {
+                  const pLower = pat.toLowerCase();
+                  if (authorName.toLowerCase().includes(pLower) || authorEmail.toLowerCase().includes(pLower)) {
+                    match = true;
+                    break;
+                  }
+                }
+                if (!match) continue;
+              }
+
+              const message = item.message;
+              const tickets = TicketParser.extractTickets(message);
+
+              commits.push({
+                commitHash: item.hash,
+                authorName,
+                authorEmail,
+                timestamp: dt,
+                message,
+                projectName: repo,
+                provider: 'bitbucket',
+                durationMinutes: 0,
+                tickets,
+                isSessionStart: true
+              });
             }
 
-            const message = item.message;
-            const tickets = TicketParser.extractTickets(message);
-
-            commits.push({
-              commitHash: item.hash,
-              authorName,
-              authorEmail,
-              timestamp: dt,
-              message,
-              projectName: repo,
-              provider: 'bitbucket',
-              durationMinutes: 0,
-              tickets,
-              isSessionStart: true
-            });
+            if (url) {
+              url = data.next || '';
+            }
+          } catch (e: any) {
+            if (e.response && (e.response.status === 404 || e.response.status === 409) && branch === 'develop' && !branchFallbackDone) {
+              // Fallback to default branch
+              url = `https://api.bitbucket.org/2.0/repositories/${this.workspace}/${repo}/commits?pagelen=100`;
+              branchFallbackDone = true;
+              continue;
+            }
+            console.error(`\nError fetching Bitbucket commits for ${repo} on branch ${branch}:`, e.message || e);
+            break;
           }
-
-          if (url) {
-            url = data.next || '';
-          }
-        } catch (e) {
-          console.error(`\nError fetching Bitbucket commits for ${repo}:`, e);
-          break;
         }
       }
-      // process.stdout.write(`Done.\n`);
     }
 
     return commits;

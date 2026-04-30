@@ -41,6 +41,9 @@ During setup, you will need:
 - **GitHub Owner**: Username or Organization name.
 - **GitLab Project ID**: Numeric ID or full path (`namespace/project`).
 
+### Branch Fetching Strategy
+By default, the tool will fetch commits only from the `develop` branch (falling back to the default branch if `develop` doesn't exist). During setup, you can optionally configure it to fetch from **all active branches** (except `master` and `main`). This is useful if you work on feature branches and want your commits counted before they are merged.
+
 ## Monthly Workflow (End of Month)
 
 Follow these steps at the end of each month before issuing your invoice:
@@ -48,6 +51,8 @@ Follow these steps at the end of each month before issuing your invoice:
 1. **Sync Latest Activity**: Fetch the latest commits for the current month.
    ```bash
    npm run fetch
+   # If you need to force a refetch, always use -- before flags:
+   # npm run fetch -- --force
    ```
 2. **Update Workdays**: Open `workdays.txt` and add the total number of days you worked for the month.
    ```text
@@ -63,7 +68,12 @@ Follow these steps at the end of each month before issuing your invoice:
 
 ## Usage
 
-All commands are run via `npm run`. When passing flags (like `--year`), you must use a double-dash `--` to separate NPM arguments from CLI arguments.
+> [!IMPORTANT]
+> **NPM Arguments vs. CLI Arguments**
+> All commands are run via `npm run`. When passing flags (like `--year` or `--force`), you **MUST** use a double-dash `--` to separate NPM arguments from CLI arguments. Otherwise, `npm` will intercept the flags and they won't reach the script!
+> 
+> ✅ **Correct:** `npm run fetch -- --force`
+> ❌ **Wrong:** `npm run fetch --force`
 
 ### 1. Fetch Commits
 Sync commits from your configured remote APIs and store them in a local `.ggts/` cache.

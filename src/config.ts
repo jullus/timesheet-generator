@@ -9,6 +9,7 @@ export interface AppConfig {
     gitlab?: { projectId: string };
   };
   repos: string[]; // Deprecated, but keeping for compatibility if needed
+  branchStrategy?: 'develop' | 'all-except-main';
   authors: { name: string; email: string }[];
   timezone: string;
   sessionTimeout: number;
@@ -27,6 +28,7 @@ export class ConfigManager {
     return {
       providers: {},
       repos: [],
+      branchStrategy: 'develop',
       authors: [],
       timezone: 'UTC',
       sessionTimeout: 60

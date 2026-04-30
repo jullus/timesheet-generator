@@ -4,6 +4,7 @@ export abstract class BaseProvider {
   abstract fetchCommits(
     since?: Date,
     until?: Date,
-    authorPatterns?: string[]
+    authorPatterns?: string[],
+    branchStrategy?: 'develop' | 'all-except-main'
   ): Promise<CommitActivity[]>;
 }

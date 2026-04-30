@@ -32,7 +32,7 @@ export class LocalGitProvider extends BaseProvider {
     return repos;
   }
 
-  async fetchCommits(since?: Date, until?: Date, authorPatterns?: string[]): Promise<CommitActivity[]> {
+  async fetchCommits(since?: Date, until?: Date, authorPatterns?: string[], branchStrategy?: 'develop' | 'all-except-main'): Promise<CommitActivity[]> {
     const commits: CommitActivity[] = [];
     const repos = this.findGitRepos(this.baseDir).sort((a, b) => a.localeCompare(b));
 

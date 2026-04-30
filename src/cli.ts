@@ -181,6 +181,17 @@ program
     });
     globalConfig.additionalInfo = info.trim() || undefined;
 
+    // Branch Fetching Strategy
+    const strategy = await select({
+      message: 'Branch Fetching Strategy:',
+      choices: [
+        { name: 'Fetch from "develop" branch only (Default)', value: 'develop' },
+        { name: 'Fetch from all active branches except "master" / "main"', value: 'all-except-main' }
+      ],
+      default: globalConfig.branchStrategy || 'develop'
+    });
+    globalConfig.branchStrategy = strategy as 'develop' | 'all-except-main';
+
     ConfigManager.save(globalConfig);
     console.log(`Setup complete! Configuration saved to ${path.join(process.cwd(), '.ggts', 'config.json')}`);
   });
@@ -296,7 +307,7 @@ program
             continue;
           }
           const p = new BitbucketProvider(conf.workspace, r);
-          const commits = await p.fetchCommits(mSince, mUntil, authorPatterns);
+          const commits = await p.fetchCommits(mSince, mUntil, authorPatterns, globalConfig.branchStrategy);
           if (commits.length > 0) {
             process.stdout.write(`  [Bitbucket] ${r}: ${commits.length} commits\n`);
             fetchedCommits = fetchedCommits.concat(commits);
@@ -312,7 +323,7 @@ program
             continue;
           }
           const p = new GitHubProvider(conf.owner, r);
-          const commits = await p.fetchCommits(mSince, mUntil, authorPatterns);
+          const commits = await p.fetchCommits(mSince, mUntil, authorPatterns, globalConfig.branchStrategy);
           if (commits.length > 0) {
             process.stdout.write(`  [GitHub] ${r}: ${commits.length} commits\n`);
             fetchedCommits = fetchedCommits.concat(commits);
@@ -323,7 +334,7 @@ program
 
       if (globalConfig.providers.gitlab) {
         const p = new GitLabProvider(globalConfig.providers.gitlab.projectId);
-        const commits = await p.fetchCommits(mSince, mUntil, authorPatterns);
+        const commits = await p.fetchCommits(mSince, mUntil, authorPatterns, globalConfig.branchStrategy);
         if (commits.length > 0) {
           process.stdout.write(`  [GitLab]: ${commits.length} commits\n`);
           fetchedCommits = fetchedCommits.concat(commits);

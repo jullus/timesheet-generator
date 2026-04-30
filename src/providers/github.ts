@@ -42,7 +42,7 @@ export class GitHubProvider extends BaseProvider {
     return reposToFetch.sort((a, b) => a.localeCompare(b));
   }
 
-  async fetchCommits(since?: Date, until?: Date, authorPatterns?: string[]): Promise<CommitActivity[]> {
+  async fetchCommits(since?: Date, until?: Date, authorPatterns?: string[], branchStrategy: 'develop' | 'all-except-main' = 'develop'): Promise<CommitActivity[]> {
     const commits: CommitActivity[] = [];
     const token = await SecretsManager.getToken('github');
 
@@ -63,71 +63,108 @@ export class GitHubProvider extends BaseProvider {
     for (const repo of reposToFetch) {
       repoCount++;
       process.stdout.write(`  (${repoCount}/${reposToFetch.length}) Fetching commits for: ${repo}... `);
-      let url = `https://api.github.com/repos/${this.owner}/${repo}/commits?per_page=100`;
 
-      while (url) {
-        try {
-          const response = await axios.get(url, { headers });
-          const data = response.data;
-
-          for (const item of data) {
-            const authorName = item.commit.author.name;
-            const authorEmail = item.commit.author.email;
-            const dt = new Date(item.commit.author.date);
-
-            if (until && dt > until) continue;
-            if (since && dt < since) {
-              url = '';
-              break;
-            }
-
-            if (authorPatterns && authorPatterns.length > 0) {
-              let match = false;
-              for (const pat of authorPatterns) {
-                const pLower = pat.toLowerCase();
-                if (authorName.toLowerCase().includes(pLower) || authorEmail.toLowerCase().includes(pLower)) {
-                  match = true;
-                  break;
-                }
+      let branchesToFetch: string[] = [];
+      if (branchStrategy === 'all-except-main') {
+        let branchPage = 1;
+        while (true) {
+          try {
+            const bRes = await axios.get(`https://api.github.com/repos/${this.owner}/${repo}/branches?per_page=100&page=${branchPage}`, { headers });
+            if (bRes.data.length === 0) break;
+            for (const b of bRes.data) {
+              if (b.name !== 'master' && b.name !== 'main') {
+                branchesToFetch.push(b.name);
               }
-              if (!match) continue;
+            }
+            branchPage++;
+          } catch (e) {
+            console.error(`\nError fetching GitHub branches for ${repo}:`, e);
+            break;
+          }
+        }
+      } else {
+        branchesToFetch = ['develop'];
+      }
+
+      if (branchesToFetch.length === 0) {
+        process.stdout.write(`Skipped.\n`);
+        continue;
+      }
+
+      for (const branch of branchesToFetch) {
+        let url = `https://api.github.com/repos/${this.owner}/${repo}/commits?per_page=100&sha=${encodeURIComponent(branch)}`;
+        let branchFallbackDone = false;
+
+        while (url) {
+          try {
+            const response = await axios.get(url, { headers });
+            const data = response.data;
+
+            for (const item of data) {
+              const authorName = item.commit.author.name;
+              const authorEmail = item.commit.author.email;
+              const dt = new Date(item.commit.author.date);
+
+              if (until && dt > until) continue;
+              if (since && dt < since) {
+                url = '';
+                break;
+              }
+
+              if (authorPatterns && authorPatterns.length > 0) {
+                let match = false;
+                for (const pat of authorPatterns) {
+                  const pLower = pat.toLowerCase();
+                  if (authorName.toLowerCase().includes(pLower) || authorEmail.toLowerCase().includes(pLower)) {
+                    match = true;
+                    break;
+                  }
+                }
+                if (!match) continue;
+              }
+
+              const message = item.commit.message;
+              const tickets = TicketParser.extractTickets(message);
+
+              commits.push({
+                commitHash: item.sha,
+                authorName,
+                authorEmail,
+                timestamp: dt,
+                message,
+                projectName: repo,
+                provider: 'github',
+                durationMinutes: 0,
+                tickets,
+                isSessionStart: true
+              });
             }
 
-            const message = item.commit.message;
-            const tickets = TicketParser.extractTickets(message);
-
-            commits.push({
-              commitHash: item.sha,
-              authorName,
-              authorEmail,
-              timestamp: dt,
-              message,
-              projectName: repo,
-              provider: 'github',
-              durationMinutes: 0,
-              tickets,
-              isSessionStart: true
-            });
-          }
-
-          const linkHeader = response.headers['link'];
-          if (linkHeader) {
-            const match = linkHeader.match(/<([^>]+)>; rel="next"/);
-            if (match) {
-              url = match[1];
+            const linkHeader = response.headers['link'];
+            if (linkHeader) {
+              const match = linkHeader.match(/<([^>]+)>; rel="next"/);
+              if (match) {
+                url = match[1];
+              } else {
+                url = '';
+              }
             } else {
               url = '';
             }
-          } else {
-            url = '';
+          } catch (e: any) {
+            if (e.response && (e.response.status === 404 || e.response.status === 409) && branch === 'develop' && !branchFallbackDone) {
+               // Fallback to default branch
+               url = `https://api.github.com/repos/${this.owner}/${repo}/commits?per_page=100`;
+               branchFallbackDone = true;
+               continue;
+            }
+            if (e.response && e.response.status === 409) {
+               // Repository is empty
+               break;
+            }
+            console.error(`\nError fetching GitHub commits for ${repo} on branch ${branch}:`, e.message || e);
+            break;
           }
-        } catch (e: any) {
-          if (e.response && e.response.status === 409) {
-             // Repository is empty
-             break;
-          }
-          console.error(`\nError fetching GitHub commits for ${repo}:`, e);
-          break;
         }
       }
       process.stdout.write(`Done.\n`);
