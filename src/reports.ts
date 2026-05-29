@@ -12,6 +12,7 @@ export class ReportGenerator {
   commits: CommitActivity[];
   totalMinutes: number;
   targetWorkdays: Record<string, number> = {};
+  inactiveDays: Set<string> = new Set();
   config: AppConfig;
 
   constructor(commits: CommitActivity[]) {
@@ -22,6 +23,10 @@ export class ReportGenerator {
 
   setTargetWorkdays(targets: Record<string, number>) {
     this.targetWorkdays = targets;
+  }
+
+  setInactiveDays(days: string[]) {
+    this.inactiveDays = new Set(days);
   }
 
   private getProjectColor(projectName: string): string {
@@ -95,13 +100,14 @@ export class ReportGenerator {
           const cd = c.timestamp;
           return `${cd.getFullYear()}-${String(cd.getMonth() + 1).padStart(2, '0')}-${String(cd.getDate()).padStart(2, '0')}` === dayStr;
       });
-      const isHoliday = HolidayService.isHoliday(date);
+      const isCustomInactive = this.inactiveDays.has(dayStr);
+      const isHoliday = HolidayService.isHoliday(date) || isCustomInactive;
       const isWeekend = date.getDay() === 0 || date.getDay() === 6;
       
       days.push({
         date,
-        commits,
-        isNatural: commits.length > 0,
+        commits: isCustomInactive ? [] : commits,
+        isNatural: commits.length > 0 && !isCustomInactive,
         isFilled: false,
         type: isHoliday ? 'holiday' : (isWeekend ? 'weekend' : 'workday')
       });
@@ -115,7 +121,11 @@ export class ReportGenerator {
       for (const d of candidates) {
         if (activeDays.length >= targetCount) break;
         // Find "typical" commits to fill this day (from nearest future active day)
-        const nextActive = sortedCommits.find(c => c.timestamp > d.date);
+        let nextActive = sortedCommits.find(c => c.timestamp > d.date);
+        if (!nextActive) {
+          // If no future active day, look for the nearest past active day
+          nextActive = [...sortedCommits].reverse().find(c => c.timestamp < d.date);
+        }
         if (nextActive) {
           const nextDayStr = `${nextActive.timestamp.getFullYear()}-${String(nextActive.timestamp.getMonth() + 1).padStart(2, '0')}-${String(nextActive.timestamp.getDate()).padStart(2, '0')}`;
           d.commits = adjustedCommits.filter(c => {
@@ -158,6 +168,60 @@ export class ReportGenerator {
     }
 
     return { days, activeCount: activeDays.length };
+  }
+
+  private distributeDailyHours(groups: Record<string, { minutes: number, project: string }>, keys: string[]): Record<string, number> {
+    const totalMinutes = Object.values(groups).reduce((s, g) => s + g.minutes, 0);
+    const factor = totalMinutes > 0 ? 480 / totalMinutes : 0;
+    
+    // Step 1: Calculate exact and initial rounded hours
+    const items = keys.map(k => {
+      const exact = (groups[k].minutes * factor) / 60;
+      const rounded = Math.round(exact * 2) / 2;
+      return { key: k, exact, rounded };
+    });
+
+    // Step 2: Adjust sum to be exactly 8.0 hours
+    let currentSum = items.reduce((sum, item) => sum + item.rounded, 0);
+    let remaining = 8.0 - currentSum;
+
+    while (Math.abs(remaining) > 0.001) {
+      if (remaining > 0) {
+        // Need to add 0.5h to some items
+        let bestItem = items[0];
+        let maxDiff = -Infinity;
+        for (const item of items) {
+          const diff = item.exact - item.rounded;
+          if (diff > maxDiff) {
+            maxDiff = diff;
+            bestItem = item;
+          }
+        }
+        bestItem.rounded += 0.5;
+        remaining -= 0.5;
+      } else {
+        // Need to subtract 0.5h from some items
+        let bestItem = items[0];
+        let minDiff = Infinity;
+        for (const item of items) {
+          // Avoid reducing a task's hours below 0.5 if possible
+          if (item.rounded <= 0.5 && items.length > 1) continue;
+          const diff = item.exact - item.rounded;
+          if (diff < minDiff) {
+            minDiff = diff;
+            bestItem = item;
+          }
+        }
+        bestItem.rounded -= 0.5;
+        remaining += 0.5;
+      }
+    }
+
+    const result: Record<string, number> = {};
+    for (const item of items) {
+      result[item.key] = item.rounded;
+    }
+    return result;
   }
 
   async generateTimesheetPdf(filename: string, monthDate: Date): Promise<void> {
@@ -205,12 +269,10 @@ export class ReportGenerator {
             groups[key] = groups[key] || { minutes: 0, project: c.projectName };
             groups[key].minutes += c.durationMinutes;
           }
-          const factor = 480 / Object.values(groups).reduce((s, g) => s + g.minutes, 0);
           const keys = Object.keys(groups).sort((a, b) => a.localeCompare(b));
-          let alloc = 0;
-          display = keys.map((k, i) => {
-            const h = i === keys.length - 1 ? 8.0 - alloc : (groups[k].minutes * factor) / 60;
-            alloc += h;
+          const allocatedHours = this.distributeDailyHours(groups, keys);
+          display = keys.map(k => {
+            const h = allocatedHours[k];
             const projectName = groups[k].project;
             projectHours[projectName] = (projectHours[projectName] || 0) + h;
             return { text: `${k.split('|')[1]}: ${h.toFixed(1)}h`, color: this.getProjectColor(projectName) };
@@ -290,12 +352,10 @@ export class ReportGenerator {
           groups[key] = groups[key] || { minutes: 0, project: c.projectName };
           groups[key].minutes += c.durationMinutes;
         }
-        const factor = 480 / Object.values(groups).reduce((s, g) => s + g.minutes, 0);
         const keys = Object.keys(groups).sort((a, b) => a.localeCompare(b));
-        let alloc = 0;
-        keys.forEach((k, i) => {
-          const h = i === keys.length - 1 ? 8.0 - alloc : (groups[k].minutes * factor) / 60;
-          alloc += h;
+        const allocatedHours = this.distributeDailyHours(groups, keys);
+        keys.forEach(k => {
+          const h = allocatedHours[k];
           const dayStr = `${d.date.getFullYear()}-${String(d.date.getMonth() + 1).padStart(2, '0')}-${String(d.date.getDate()).padStart(2, '0')}`;
           worksheet.addRow({ day: dayStr, project: groups[k].project, task: k.split('|')[1], hours: h });
         });

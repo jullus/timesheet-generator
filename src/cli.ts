@@ -424,10 +424,23 @@ program
       process.exit(1);
     }
 
+    const targetInactiveDays: string[] = [];
     const workdaysContent = fs.readFileSync(workdaysPath, 'utf-8');
     workdaysContent.split('\n').forEach(line => {
-      const match = line.match(/^(\d{4}-\d{2})\s*-\s*(\d+)/);
-      if (match) targetWorkdays[match[1]] = parseInt(match[2]);
+      const cleanLine = line.split('#')[0].trim();
+      
+      // Pattern 1: YYYY-MM-DD (Inactive/off/holiday day)
+      const matchInactive = cleanLine.match(/^(\d{4}-\d{2}-\d{2})/);
+      if (matchInactive) {
+        targetInactiveDays.push(matchInactive[1]);
+        return;
+      }
+      
+      // Pattern 2: YYYY-MM - DaysWorked
+      const matchWorkdays = cleanLine.match(/^(\d{4}-\d{2})\s*-\s*(\d+)/);
+      if (matchWorkdays) {
+        targetWorkdays[matchWorkdays[1]] = parseInt(matchWorkdays[2]);
+      }
     });
 
     // Validate all months in range are present
@@ -460,6 +473,7 @@ program
       
       const generator = new ReportGenerator(allCommits);
       generator.setTargetWorkdays(targetWorkdays);
+      generator.setInactiveDays(targetInactiveDays);
       
       // @ts-ignore - access private for verification
       const { activeCount } = generator.calculateMonthEntries(monthDate);

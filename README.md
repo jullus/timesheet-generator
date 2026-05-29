@@ -100,12 +100,19 @@ npm run fetch -- --years 2 --force
 - The **current month** is never skipped; it is always re-fetched to stay up-to-date.
 - Use `--month` or `--force` to bypass this check and refresh historical data.
 
-### 2. Configure Workdays
+### 2. Configure Workdays & Custom Inactive Days
 Create a `workdays.txt` file in the project root to specify exactly how many days you worked each month.
+
+You can also specify specific days you were off (vacation, custom holidays, or days off). The generator will mark these days as `HOLIDAY` in the calendar and exclude them from being filled with work tasks.
+
 ```text
-# Format: YYYY-MM - DaysCount
+# Target workdays (Format: YYYY-MM - DaysCount)
 2024-12 - 18
 2025-01 - 21
+
+# Custom inactive/off days (Format: YYYY-MM-DD - off):
+2026-05-11 - off
+2026-05-12 - off
 ```
 
 ### 3. Generate Calendar Timesheets
@@ -136,5 +143,5 @@ npm run timesheet -- --year 2025 --format xlsx
 ## How it Works
 1. **Incremental Fetch**: `fetch` only pulls what's missing since your last sync.
 2. **Heuristic Engine**: Estimates work time based on commit frequency.
-3. **Smart Filling**: If `workdays.txt` says you worked 21 days but you only have 19 active days, the tool fills the remaining 2 days prioritizing RO holidays then Saturdays.
+3. **Smart Filling**: If `workdays.txt` says you worked 21 days but you only have fewer active days, the tool fills the remaining days prioritizing standard weekdays (using the nearest active day as a template). Any days explicitly configured as custom inactive days in `workdays.txt` are treated as holidays and skipped.
 4. **Project Coloring**: Each repository is assigned a deterministic color in the PDF legend.
